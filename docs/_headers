@@ -1,0 +1,13 @@
+/*
+  Cache-Control: no-store, no-cache, must-revalidate
+/counts.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  Access-Control-Allow-Origin: *
+/go/*
+  Cache-Control: no-store, no-cache, must-revalidate
+/js/*
+  Cache-Control: no-store, no-cache, must-revalidate
+/css/*
+  Cache-Control: no-store, no-cache, must-revalidate
+/data/*
+  Cache-Control: no-store, no-cache, must-revalidate

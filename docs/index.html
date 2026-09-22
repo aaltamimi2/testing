@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>UW–Madison flyer locations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="css/styles.css?v=1790114627" />
+  <script>
+    // Single JSON counts endpoint — one request, cache-busted on every load / soft refresh
+    window.__COUNTS_URLS__ = [
+      "https://mantledb.sh/v2/smooth-eagle-wf65/counts",
+      "counts.json"
+    ];
+    window.__LIVE_COUNTS__ = Object.create(null);
+    window.__COUNTS_STATUS__ = "loading";
+    window.__refreshLiveCounts__ = async function refreshLiveCounts() {
+      var bust = "?v=" + Date.now();
+      var out = Object.create(null);
+      var lastErr = null;
+      for (var i = 0; i < window.__COUNTS_URLS__.length; i++) {
+        var base = window.__COUNTS_URLS__[i];
+        try {
+          var r = await fetch(base + bust, { cache: "no-store", mode: "cors" });
+          if (!r.ok) throw new Error("http " + r.status);
+          var j = await r.json();
+          for (var k = 1; k <= 30; k++) {
+            var id = "L" + String(k).padStart(2, "0");
+            if (Object.prototype.hasOwnProperty.call(j, id)) {
+              out[id] = Number(j[id]) || 0;
+            } else if (j.counts && Object.prototype.hasOwnProperty.call(j.counts, id)) {
+              out[id] = Number(j.counts[id]) || 0;
+            }
+          }
+          window.__LIVE_COUNTS__ = out;
+          window.__COUNTS_STATUS__ = "ready";
+          window.dispatchEvent(new CustomEvent("livecounts", { detail: out }));
+          return out;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      window.__COUNTS_STATUS__ = "error";
+      throw lastErr || new Error("counts unavailable");
+    };
+    window.__COUNTS_READY__ = window.__refreshLiveCounts__();
+  </script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="brand-row">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">Referral ops</p>
+            <h1>Flyer locations</h1>
+          </div>
+        </div>
+        <p class="sub">UW–Madison · L01–L30 · live status</p>
+      </header>
+
+      <section class="panel-block" aria-label="Status legend">
+        <h2>Status</h2>
+        <ul class="legend">
+          <li><span class="dot neutral"></span><span>Not yet active</span><span class="hint">0 scans</span></li>
+          <li><span class="dot green"></span><span>Scanning</span><span class="hint">&lt;48h</span></li>
+          <li><span class="dot yellow"></span><span>Quiet</span><span class="hint">48–72h</span></li>
+          <li><span class="dot red"></span><span>Stale</span><span class="hint">72h+</span></li>
+        </ul>
+      </section>
+
+      <section class="panel-block" aria-label="Summary">
+        <h2>Overview</h2>
+        <div class="stats" id="summaryStats"></div>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-head"><h2>Top by scans</h2></div>
+        <ol id="topList" class="rank-list"></ol>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-head"><h2>Flagged / stale</h2></div>
+        <ul id="flagList" class="flag-list"></ul>
+      </section>
+
+      <footer class="sidebar-footer">
+        <span id="countsFooter">Loading live counts…</span>
+      </footer>
+    </aside>
+
+    <main class="main">
+      <div id="map"></div>
+      <aside class="detail hidden" id="detailPanel">
+        <button type="button" class="close" id="closeDetail" aria-label="Close">×</button>
+        <div id="detailBody"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/app.js?v=1790114627"></script>
+</body>
+</html>

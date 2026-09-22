@@ -1,0 +1,9 @@
+{
+  "provider": "abacus.jasoncameron.dev",
+  "namespace": "smooth-eagle-wf65.here.now",
+  "hit": "https://abacus.jasoncameron.dev/hit/smooth-eagle-wf65.here.now/{locId}",
+  "get": "https://abacus.jasoncameron.dev/get/smooth-eagle-wf65.here.now/{locId}",
+  "redirectBase": "https://smooth-eagle-wf65.here.now/go/{locId}.html",
+  "destination": "https://join.robinhood.com/alia-f4ff6b99b",
+  "note": "Fragments like #l01 were only on old da.gd targets (to uniquify links). New /go pages redirect to the clean invite URL with no hash. Old da.gd QRs still work for signup but do not increment live counts until reprinted."
+}
