@@ -44,6 +44,7 @@
   }
 
   function deriveAlert(loc) {
+    if (loc.removed) return 'Flyer missing / pulled — do not rehang this spot';
     if (loc.status === 'yellow') return 'No scan in 48+ hours';
     if (loc.status === 'red') return 'No scan in 72+ hours — check if flyer fell or was removed';
     return null;
@@ -67,8 +68,13 @@
       if (next > (loc.totalScans || 0)) loc.lastScanAt = new Date().toISOString();
       loc.totalScans = next;
       if (next > 0) withScans += 1;
-      loc.status = deriveStatus(loc);
-      loc.staleAlert = deriveAlert(loc);
+      if (loc.removed) {
+        loc.status = 'red';
+        loc.staleAlert = deriveAlert(loc);
+      } else {
+        loc.status = deriveStatus(loc);
+        loc.staleAlert = deriveAlert(loc);
+      }
     });
     const footer = document.getElementById('countsFooter');
     if (footer) {
@@ -88,7 +94,7 @@
       const h = Math.round((n / maxTrend) * 100);
       return `<div class="bar"><div class="fill" style="height:${h}%"></div></div>`;
     }).join('');
-    const statusLabel = { neutral: 'Not yet active', green: 'Scanning', yellow: 'Quiet', red: 'Stale' }[loc.status] || loc.status;
+    const statusLabel = loc.removed ? 'Missing / pulled' : ({ neutral: 'Not yet active', green: 'Scanning', yellow: 'Quiet', red: 'Stale' }[loc.status] || loc.status);
     body.innerHTML = `
       <span class="badge ${loc.status}">${statusLabel}</span>
       <h3>${loc.id}<br><span style="font-weight:500;font-size:0.95rem;color:var(--text-secondary)">${loc.name}</span></h3>
@@ -173,7 +179,20 @@
     document.getElementById('detailPanel').classList.add('hidden');
   };
 
-  // Wait for inline (no-cache HTML) count bootstrap before first paint of pins
+  // Draw hung pins immediately — do not block on Mantle (slow/CORS left the map blank)
+  placeMarkers();
+  if (locations.length) {
+    const bounds = L.latLngBounds(locations.map((l) => [l.lat, l.lng]));
+    map.fitBounds(bounds.pad(0.35));
+  }
+  // Keep removed Locs red even before counts land
+  locations.forEach((loc) => {
+    if (loc.removed) {
+      loc.status = 'red';
+      loc.staleAlert = deriveAlert(loc);
+    }
+  });
+  renderSidebar();
   document.getElementById('topList').innerHTML =
     '<li class="empty-state" style="grid-column:1/-1">Loading live scan counts…</li>';
 
@@ -184,10 +203,8 @@
     console.warn('live counts failed', e);
     const footer = document.getElementById('countsFooter');
     if (footer) footer.textContent = 'Live counts unavailable — retrying…';
+    renderSidebar();
   }
-
-  placeMarkers();
-  renderSidebar();
 
   window.addEventListener('livecounts', (ev) => applyCounts(ev.detail || {}));
   window.addEventListener('pageshow', (ev) => {
