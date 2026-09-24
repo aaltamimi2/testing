@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="css/styles.css?v=1790215428" />
+  <link rel="stylesheet" href="css/styles.css?v=1790282200" />
   <script>
     // Single JSON counts endpoint — one request, cache-busted on every load / soft refresh
     window.__COUNTS_URLS__ = [
@@ -36,6 +36,14 @@
               out[id] = Number(j[id]) || 0;
             } else if (j.counts && Object.prototype.hasOwnProperty.call(j.counts, id)) {
               out[id] = Number(j.counts[id]) || 0;
+            }
+          }
+          for (var c = 1; c <= 100; c++) {
+            var cid = "C" + String(c).padStart(3, "0");
+            if (Object.prototype.hasOwnProperty.call(j, cid)) {
+              out[cid] = Number(j[cid]) || 0;
+            } else if (j.counts && Object.prototype.hasOwnProperty.call(j.counts, cid)) {
+              out[cid] = Number(j.counts[cid]) || 0;
             }
           }
           window.__LIVE_COUNTS__ = out;
@@ -91,6 +99,13 @@
         <ul id="flagList" class="flag-list"></ul>
       </section>
 
+      <section class="panel-block" aria-label="Handout cards">
+        <div class="section-head"><h2>Handout cards</h2></div>
+        <div id="cardSummary">
+          <p class="empty-state">Loading card counts…</p>
+        </div>
+      </section>
+
       <footer class="sidebar-footer">
         <span id="countsFooter">Loading live counts…</span>
       </footer>
@@ -106,6 +121,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="js/app.js?v=1790215428"></script>
+  <script src="js/app.js?v=1790282200"></script>
 </body>
 </html>

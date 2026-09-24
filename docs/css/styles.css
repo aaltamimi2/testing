@@ -272,6 +272,22 @@ h2 {
   border-color: var(--border-strong) !important;
 }
 
+.card-summary .stats { margin-bottom: 10px; }
+.card-line {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+.card-list { margin-top: 0; }
+.card-list li {
+  grid-template-columns: 1fr auto;
+  cursor: default;
+}
+.card-list li:hover {
+  background: var(--row);
+  border-color: transparent;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding: 16px 22px 4px;
