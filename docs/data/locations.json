@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Robinhood flyer location map \u2014 hung spots",
-    "generatedAt": "2026-09-23T21:03:48.177054-05:00",
+    "generatedAt": "2026-09-24T13:39:30.292311-05:00",
     "timezoneNote": "America/Chicago",
     "center": {
       "lat": 43.074619999999996,
@@ -14,7 +14,7 @@
       "yellow": "no scan in 48\u201372 hours",
       "red": "no scan in 72+ hours (flag for replacement check)"
     },
-    "dataNote": "Only hung flyer Locs (L01\u2013L07 as of 2026-09-23). L03 pulled same day (admin); kept on map as missing. Add new Locs when hung. Live counts from Mantle overlay when available.",
+    "dataNote": "Only hung flyer Locs (L01\u2013L07 as of 2026-09-23, plus L11\u2013L13 at Engineering Hall as of 2026-09-24). L03 pulled same day (admin); kept on map as missing. Add new Locs when hung. Live counts from Mantle overlay when available.",
     "campus": "UW-Madison",
     "tracking": {
       "provider": "abacus.jasoncameron.dev",
@@ -207,6 +207,81 @@
       "draft": false,
       "notes": "Hung 2026-09-23. Exact: B3 middle hallway. Short link https://da.gd/QHGWp.",
       "legacyShortUrl": "https://da.gd/QHGWp",
+      "removed": false
+    },
+    {
+      "id": "L11",
+      "type": "campus",
+      "name": "Engineering Hall",
+      "lat": 43.07206,
+      "lng": -89.40952,
+      "shortUrl": "/go/L11.html",
+      "destination": "https://join.robinhood.com/alia-f4ff6b99b",
+      "totalScans": 0,
+      "lastScanAt": null,
+      "scanTrend7d": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "status": "neutral",
+      "staleAlert": null,
+      "draft": false,
+      "notes": "Hung 2026-09-24 around 1:30 PM America/Chicago at Engineering Hall, 1415 Engineering Dr. spot TBD. Tracked /go QR.",
+      "removed": false
+    },
+    {
+      "id": "L12",
+      "type": "campus",
+      "name": "Engineering Hall",
+      "lat": 43.07178,
+      "lng": -89.40942,
+      "shortUrl": "/go/L12.html",
+      "destination": "https://join.robinhood.com/alia-f4ff6b99b",
+      "totalScans": 0,
+      "lastScanAt": null,
+      "scanTrend7d": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "status": "neutral",
+      "staleAlert": null,
+      "draft": false,
+      "notes": "Hung 2026-09-24 around 1:30 PM America/Chicago at Engineering Hall, 1415 Engineering Dr. spot TBD. Tracked /go QR.",
+      "removed": false
+    },
+    {
+      "id": "L13",
+      "type": "campus",
+      "name": "Engineering Hall",
+      "lat": 43.07190,
+      "lng": -89.41005,
+      "shortUrl": "/go/L13.html",
+      "destination": "https://join.robinhood.com/alia-f4ff6b99b",
+      "totalScans": 0,
+      "lastScanAt": null,
+      "scanTrend7d": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "status": "neutral",
+      "staleAlert": null,
+      "draft": false,
+      "notes": "Hung 2026-09-24 around 1:30 PM America/Chicago at Engineering Hall, 1415 Engineering Dr. spot TBD. Tracked /go QR.",
       "removed": false
     }
   ]
