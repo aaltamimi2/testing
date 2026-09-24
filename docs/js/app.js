@@ -83,7 +83,46 @@
         : 'Live counts · no scans yet';
     }
     renderSidebar();
+    renderCards(counts);
     refreshMarkers();
+  }
+
+  function renderCards(counts, state) {
+    const el = document.getElementById('cardSummary');
+    if (!el) return;
+    if (state === 'error') {
+      el.innerHTML = '<p class="empty-state">Card counts unavailable</p>';
+      return;
+    }
+    let total = 0;
+    let scanned = 0;
+    const rows = [];
+    for (let n = 1; n <= 100; n++) {
+      const id = 'C' + String(n).padStart(3, '0');
+      const scans = Number(counts && counts[id]) || 0;
+      total += scans;
+      if (scans > 0) {
+        scanned += 1;
+        rows.push({ id, scans });
+      }
+    }
+    rows.sort((a, b) => b.scans - a.scans || (a.id < b.id ? -1 : 1));
+    const top = rows.slice(0, 5);
+    const list = top.length
+      ? `<ol class="rank-list card-list">${top.map((row) => `
+      <li>
+        <span class="id">${row.id}</span>
+        <span class="metric">${row.scans}</span>
+      </li>`).join('')}</ol>`
+      : '<p class="empty-state">No card scans yet</p>';
+    el.innerHTML = `
+      <div class="stats card-summary">
+        <div class="stat"><div class="n">${total}</div><div class="l">Card scans</div></div>
+        <div class="stat"><div class="n">${scanned}</div><div class="l">Cards used</div></div>
+      </div>
+      <p class="card-line">${scanned} of 100 cards scanned</p>
+      ${list}
+    `;
   }
 
   function showDetail(loc) {
@@ -204,6 +243,7 @@
     const footer = document.getElementById('countsFooter');
     if (footer) footer.textContent = 'Live counts unavailable — retrying…';
     renderSidebar();
+    renderCards(null, 'error');
   }
 
   window.addEventListener('livecounts', (ev) => applyCounts(ev.detail || {}));
