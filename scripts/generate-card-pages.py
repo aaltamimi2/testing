@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Write docs/go/C001.html–C100.html from the L11 forwarder template.
+"""Write docs/go/C001.html–C500.html from the L11 forwarder template.
 
-Card pages are not map pins. This script does not modify dest.js or any L page.
+Card pages are not flyer pins. This script does not modify dest.js or any L page.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "docs" / "go" / "L11.html"
 OUT_DIR = ROOT / "docs" / "go"
 TEMPLATE_ID = "L11"
-COUNT = 100
+COUNT = 500
 
 
 def main() -> None:
