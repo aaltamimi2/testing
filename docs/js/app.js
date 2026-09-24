@@ -16,6 +16,12 @@
   }).addTo(map);
 
   const markers = {};
+  const batchMarkers = {};
+  let cardBatches = [];
+  let batchesState = 'loading';
+  let countsState = 'loading';
+  let latestCounts = {};
+  let openBatch = null;
 
   function hoursSince(iso) {
     if (!iso) return Infinity;
@@ -82,50 +88,328 @@
         ? `Live counts · ${withScans} location${withScans === 1 ? '' : 's'} with scans`
         : 'Live counts · no scans yet';
     }
+    latestCounts = counts || {};
+    countsState = 'ready';
     renderSidebar();
-    renderCards(counts);
+    renderConversion();
     refreshMarkers();
   }
 
-  function renderCards(counts, state) {
-    const el = document.getElementById('cardSummary');
-    if (!el) return;
-    if (state === 'error') {
-      el.innerHTML = '<p class="empty-state">Card counts unavailable</p>';
-      return;
-    }
-    let total = 0;
+  const CARD_TOTAL = 500;
+  const WEEKDAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[ch]));
+  }
+
+  function cardId(n) {
+    return 'C' + String(n).padStart(3, '0');
+  }
+
+  function cardNumber(id) {
+    const match = /^C(\d{3})$/.exec(String(id || ''));
+    return match ? Number(match[1]) : null;
+  }
+
+  function cardsInRange(from, to) {
+    const a = cardNumber(from);
+    const b = cardNumber(to);
+    if (a == null || b == null) return [];
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    const ids = [];
+    for (let n = lo; n <= hi; n++) ids.push(cardId(n));
+    return ids;
+  }
+
+  function weekdayOf(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+  }
+
+  function wilsonInterval(successes, n, z) {
+    const trials = Number(n);
+    if (!(trials > 0)) return null;
+    const wins = Math.min(Math.max(Number(successes) || 0, 0), trials);
+    const zed = z || 1.96;
+    const p = wins / trials;
+    const z2 = zed * zed;
+    const denom = 1 + z2 / trials;
+    const center = (p + z2 / (2 * trials)) / denom;
+    const margin = (zed * Math.sqrt((p * (1 - p)) / trials + z2 / (4 * trials * trials))) / denom;
+    return { p, low: Math.max(0, center - margin), high: Math.min(1, center + margin) };
+  }
+
+  function formatPct(value) {
+    if (value == null || !Number.isFinite(value)) return '—';
+    const pct = value * 100;
+    if (pct === 0) return '0%';
+    if (pct < 1) return pct.toFixed(2) + '%';
+    return pct.toFixed(1) + '%';
+  }
+
+  function formatCi(interval) {
+    if (!interval) return '—';
+    return formatPct(interval.low) + '\u2013' + formatPct(interval.high);
+  }
+
+  function formatCount(value) {
+    if (!Number.isFinite(value)) return '—';
+    if (Math.abs(value - Math.round(value)) < 1e-6) return String(Math.round(value));
+    return value.toFixed(1);
+  }
+
+  function formatCards(value) {
+    if (!Number.isFinite(value)) return '—';
+    return Math.ceil(value).toLocaleString('en-US');
+  }
+
+  function countScans(id) {
+    return Number(latestCounts && latestCounts[id]) || 0;
+  }
+
+  function distinctScanned(batch) {
+    let n = 0;
+    cardsInRange(batch.cardFrom, batch.cardTo).forEach((id) => {
+      if (countScans(id) > 0) n += 1;
+    });
+    return n;
+  }
+
+  function batchDates(batch) {
+    return (Array.isArray(batch.dates) ? batch.dates : []).filter((iso) => weekdayOf(iso));
+  }
+
+  function allCardSummary() {
     let scanned = 0;
     const rows = [];
-    for (let n = 1; n <= 100; n++) {
-      const id = 'C' + String(n).padStart(3, '0');
-      const scans = Number(counts && counts[id]) || 0;
-      total += scans;
+    for (let n = 1; n <= CARD_TOTAL; n++) {
+      const id = cardId(n);
+      const scans = countScans(id);
       if (scans > 0) {
         scanned += 1;
         rows.push({ id, scans });
       }
     }
     rows.sort((a, b) => b.scans - a.scans || (a.id < b.id ? -1 : 1));
-    const top = rows.slice(0, 5);
+    return { scanned, rows };
+  }
+
+  function poolBatches(list) {
+    let handed = 0;
+    let starts = 0;
+    const seen = new Set();
+    list.forEach((batch) => {
+      handed += Number(batch.handedOut) || 0;
+      starts += Number(batch.inProgressStarts) || 0;
+      cardsInRange(batch.cardFrom, batch.cardTo).forEach((id) => {
+        if (countScans(id) > 0) seen.add(id);
+      });
+    });
+    return { handed, starts, scanned: seen.size };
+  }
+
+  function groupByPlace(list) {
+    const groups = new Map();
+    list.forEach((batch) => {
+      const place = String(batch.place || 'Unknown place');
+      if (!groups.has(place)) groups.set(place, { place, handed: 0, starts: 0 });
+      const row = groups.get(place);
+      row.handed += Number(batch.handedOut) || 0;
+      row.starts += Number(batch.inProgressStarts) || 0;
+    });
+    return [...groups.values()].sort((a, b) => b.handed - a.handed || a.place.localeCompare(b.place));
+  }
+
+  function groupByWeekday(list) {
+    const groups = new Map();
+    list.forEach((batch) => {
+      const dates = batchDates(batch);
+      if (!dates.length) return;
+      const shareHanded = (Number(batch.handedOut) || 0) / dates.length;
+      const shareStarts = (Number(batch.inProgressStarts) || 0) / dates.length;
+      dates.forEach((iso) => {
+        const day = weekdayOf(iso);
+        if (!groups.has(day)) groups.set(day, { day, handed: 0, starts: 0 });
+        const row = groups.get(day);
+        row.handed += shareHanded;
+        row.starts += shareStarts;
+      });
+    });
+    return WEEKDAY_ORDER.filter((day) => groups.has(day)).map((day) => groups.get(day));
+  }
+
+  function rateCells(handed, starts) {
+    const interval = wilsonInterval(starts, handed);
+    const rate = handed > 0 ? (Number(starts) || 0) / handed : null;
+    return `<td class="num">${esc(formatCount(handed))}</td><td class="num">${esc(formatCount(starts))}</td><td class="num">${esc(formatPct(rate))}</td><td class="num">${esc(formatCi(interval))}</td>`;
+  }
+
+  function scanLineHtml() {
+    if (countsState === 'loading') return '<p class="card-line">Loading card counts…</p>';
+    if (countsState === 'error') return '<p class="card-line">Card counts unavailable</p>';
+    const summary = allCardSummary();
+    const top = summary.rows.slice(0, 5);
     const list = top.length
       ? `<ol class="rank-list card-list">${top.map((row) => `
-      <li>
-        <span class="id">${row.id}</span>
-        <span class="metric">${row.scans}</span>
-      </li>`).join('')}</ol>`
-      : '<p class="empty-state">No card scans yet</p>';
+      <li><span class="id">${esc(row.id)}</span><span class="metric">${esc(row.scans)}</span></li>`).join('')}</ol>`
+      : '';
+    return `<p class="card-line">${summary.scanned} of ${CARD_TOTAL} cards scanned</p>${list}`;
+  }
+
+  function renderGoal(pooled) {
+    const el = document.getElementById('cardGoalResult');
+    const input = document.getElementById('cardGoal');
+    if (!el) return;
+    if (batchesState !== 'ready' || !cardBatches.length || !pooled) {
+      el.innerHTML = '<p class="muted">Add a batch to estimate how many cards to hand out.</p>';
+      return;
+    }
+    const target = Number(input && input.value);
+    if (!(target > 0)) {
+      el.innerHTML = '<p class="muted">Enter a target number of in-progress signups.</p>';
+      return;
+    }
+    const interval = wilsonInterval(pooled.starts, pooled.handed);
+    if (!(pooled.starts > 0) || !interval || !(interval.low > 0)) {
+      el.innerHTML = '<p class="card-line">Not enough data</p>';
+      return;
+    }
+    const point = target / interval.p;
+    const conservative = target / interval.low;
+    const z = 1.96;
+    const precisionN = (z * z * interval.p * (1 - interval.p)) / (0.01 * 0.01);
     el.innerHTML = `
-      <div class="stats card-summary">
-        <div class="stat"><div class="n">${total}</div><div class="l">Card scans</div></div>
-        <div class="stat"><div class="n">${scanned}</div><div class="l">Cards used</div></div>
-      </div>
-      <p class="card-line">${scanned} of 100 cards scanned</p>
-      ${list}
+      <p class="card-line">Point estimate: ${esc(formatCards(point))} cards</p>
+      <p class="card-line">Conservative (CI lower bound): ${esc(formatCards(conservative))} cards</p>
+      <p class="muted">About ${esc(formatCards(precisionN))} cards for a ±1 percentage point margin at this rate.</p>
     `;
   }
 
+  function renderConversion() {
+    const el = document.getElementById('cardSummary');
+    if (!el) return;
+    const scans = scanLineHtml();
+    if (batchesState === 'loading') {
+      el.innerHTML = `<p class="empty-state">Loading handout batches…</p>${scans}`;
+      renderGoal(null);
+      return;
+    }
+    if (batchesState === 'error') {
+      el.innerHTML = `<p class="empty-state">Couldn’t load handout batches.</p>${scans}`;
+      renderGoal(null);
+      return;
+    }
+    if (!cardBatches.length) {
+      el.innerHTML = `<p class="empty-state">No handout batches yet.</p>${scans}`;
+      renderGoal(null);
+      if (openBatch) showBatchDetail(openBatch);
+      return;
+    }
+    const pooled = poolBatches(cardBatches);
+    const interval = wilsonInterval(pooled.starts, pooled.handed);
+    const rate = pooled.handed > 0 ? pooled.starts / pooled.handed : null;
+    const scanRate = pooled.handed > 0 ? pooled.scanned / pooled.handed : null;
+    const places = groupByPlace(cardBatches);
+    const days = groupByWeekday(cardBatches);
+    const placeTable = places.length ? `<table class="conv-table"><thead><tr><th>Place</th><th class="num">n</th><th class="num">Starts</th><th class="num">Rate</th><th class="num">95% CI</th></tr></thead><tbody>${places.map((row) => `<tr><td>${esc(row.place)}</td>${rateCells(row.handed, row.starts)}</tr>`).join('')}</tbody></table>` : '';
+    const dayTable = days.length ? `<table class="conv-table"><thead><tr><th>Weekday</th><th class="num">n</th><th class="num">Starts</th><th class="num">Rate</th><th class="num">95% CI</th></tr></thead><tbody>${days.map((row) => `<tr><td>${esc(row.day)}</td>${rateCells(row.handed, row.starts)}</tr>`).join('')}</tbody></table>` : '';
+    el.innerHTML = `
+      <div class="stats card-summary">
+        <div class="stat"><div class="n">${esc(formatPct(rate))}</div><div class="l">Conversion</div></div>
+        <div class="stat"><div class="n">${esc(formatCount(pooled.handed))}</div><div class="l">Handed out</div></div>
+        <div class="stat"><div class="n">${countsState === 'ready' ? esc(String(pooled.scanned)) : '—'}</div><div class="l">Cards scanned</div></div>
+        <div class="stat"><div class="n">${countsState === 'ready' ? esc(formatPct(scanRate)) : '—'}</div><div class="l">Scan rate</div></div>
+      </div>
+      <p class="card-line">95% CI ${esc(formatCi(interval))} · n=${esc(formatCount(pooled.handed))}</p>
+      <h2>By location</h2>
+      ${placeTable}
+      <h2>By weekday</h2>
+      ${dayTable || '<p class="empty-state">No dates on these batches yet.</p>'}
+      ${scans}
+    `;
+    renderGoal(pooled);
+    if (openBatch) showBatchDetail(openBatch);
+  }
+
+  function makeBatchIcon() {
+    return L.divIcon({
+      className: 'batch-marker',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+      html: '<div style="width:16px;height:16px;margin:3px;background:#4ade80;transform:rotate(45deg);border:2px solid #0a0a0a;box-shadow:0 2px 8px rgba(0,0,0,0.35)"></div>',
+    });
+  }
+
+  function showBatchDetail(batch) {
+    openBatch = batch;
+    const panel = document.getElementById('detailPanel');
+    const body = document.getElementById('detailBody');
+    const handed = Number(batch.handedOut) || 0;
+    const starts = Number(batch.inProgressStarts) || 0;
+    const scanned = countsState === 'ready' ? distinctScanned(batch) : null;
+    const interval = wilsonInterval(starts, handed);
+    const rate = handed > 0 ? starts / handed : null;
+    const scanRate = scanned != null && handed > 0 ? scanned / handed : null;
+    const perScan = scanned > 0 ? starts / scanned : null;
+    const dates = batchDates(batch);
+    const when = dates.length
+      ? dates.map((iso) => esc(iso) + ' (' + esc(weekdayOf(iso)) + ')').join('<br>')
+      : '—';
+    const notes = String(batch.notes || '').trim();
+    body.innerHTML = `
+      <span class="badge green">Handout batch</span>
+      <h3>${esc(batch.id || 'Batch')}<br><span style="font-weight:500;font-size:0.95rem;color:var(--text-secondary)">${esc(batch.place || 'Handout')}</span></h3>
+      <div class="meta">${esc(batch.cardFrom || '?')}\u2013${esc(batch.cardTo || '?')}</div>
+      <div class="kv">
+        <div class="muted">When</div><div>${when}</div>
+        <div class="muted">Handed out</div><div>${esc(formatCount(handed))}</div>
+        <div class="muted">Cards scanned</div><div>${scanned == null ? '—' : esc(String(scanned))}</div>
+        <div class="muted">Scan rate</div><div>${scanRate == null ? '—' : esc(formatPct(scanRate))}</div>
+        <div class="muted">In progress</div><div>${esc(formatCount(starts))}</div>
+        <div class="muted">Conversion</div><div>${esc(formatPct(rate))}</div>
+        <div class="muted">95% CI</div><div>${esc(formatCi(interval))}</div>
+        <div class="muted">Starts / scan</div><div>${perScan == null ? '—' : esc(perScan.toFixed(2))}</div>
+      </div>
+      ${notes ? `<div class="muted">${esc(notes)}</div>` : ''}
+    `;
+    panel.classList.remove('hidden');
+  }
+
+  function placeBatchMarkers() {
+    Object.keys(batchMarkers).forEach((id) => {
+      map.removeLayer(batchMarkers[id]);
+      delete batchMarkers[id];
+    });
+    const placed = [];
+    cardBatches.forEach((batch, index) => {
+      const lat = Number(batch.lat);
+      const lng = Number(batch.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const id = batch.id || ('B' + (index + 1));
+      const marker = L.marker([lat, lng], { icon: makeBatchIcon(), zIndexOffset: 500 })
+        .addTo(map)
+        .bindTooltip(`${batch.place || id} · handout`, { direction: 'top' });
+      marker.on('click', () => showBatchDetail(batch));
+      batchMarkers[id] = marker;
+      placed.push([lat, lng]);
+    });
+    if (placed.length && locations.length) {
+      const bounds = L.latLngBounds(locations.map((loc) => [loc.lat, loc.lng]).concat(placed));
+      map.fitBounds(bounds.pad(0.35));
+    }
+  }
+
   function showDetail(loc) {
+    openBatch = null;
     const panel = document.getElementById('detailPanel');
     const body = document.getElementById('detailBody');
     const maxTrend = Math.max(1, ...(loc.scanTrend7d || [0]));
@@ -215,8 +499,27 @@
   }
 
   document.getElementById('closeDetail').onclick = () => {
+    openBatch = null;
     document.getElementById('detailPanel').classList.add('hidden');
   };
+
+  const goalInput = document.getElementById('cardGoal');
+  if (goalInput) goalInput.addEventListener('input', () => renderConversion());
+
+  const batchesPromise = fetch('data/card-batches.json?t=' + Date.now(), { cache: 'no-store' })
+    .then((r) => {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    })
+    .then((data) => {
+      cardBatches = (data && Array.isArray(data.batches)) ? data.batches.filter((batch) => batch && typeof batch === 'object') : [];
+      batchesState = 'ready';
+    })
+    .catch((e) => {
+      console.warn('handout batches failed', e);
+      cardBatches = [];
+      batchesState = 'error';
+    });
 
   // Draw hung pins immediately — do not block on Mantle (slow/CORS left the map blank)
   placeMarkers();
@@ -234,6 +537,11 @@
   renderSidebar();
   document.getElementById('topList').innerHTML =
     '<li class="empty-state" style="grid-column:1/-1">Loading live scan counts…</li>';
+  renderConversion();
+  batchesPromise.then(() => {
+    placeBatchMarkers();
+    renderConversion();
+  });
 
   try {
     const counts = await (window.__COUNTS_READY__ || window.__refreshLiveCounts__());
@@ -242,8 +550,9 @@
     console.warn('live counts failed', e);
     const footer = document.getElementById('countsFooter');
     if (footer) footer.textContent = 'Live counts unavailable — retrying…';
+    countsState = 'error';
     renderSidebar();
-    renderCards(null, 'error');
+    renderConversion();
   }
 
   window.addEventListener('livecounts', (ev) => applyCounts(ev.detail || {}));

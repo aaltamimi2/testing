@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>Opening Robinhood…</title>
+  <style>
+    body { margin:0; min-height:100vh; display:grid; place-items:center;
+      font-family: system-ui, sans-serif; background:#0a0a0a; color:#f5f5f5; text-align:center; }
+    p { opacity:.7; font-size:0.95rem; }
+    a { color:#f5f5f5; }
+  </style>
+  <script>
+    (function () {
+      var LOC = "C294";
+      var HIT_ABACUS = "https://abacus.jasoncameron.dev/hit/smooth-eagle-wf65.here.now/" + LOC;
+      var HIT_COUNTS = "https://mantledb.sh/v2/increment/smooth-eagle-wf65/counts";
+      var done = false;
+      var leave = false;
+      function destination() {
+        var dest = window.FLYER_DEST;
+        if (typeof dest !== "string") return "";
+        dest = dest.trim();
+        if (dest.indexOf("https://") !== 0) return "";
+        return dest;
+      }
+      function paintLink() {
+        var dest = destination();
+        var link = document.getElementById("go-link");
+        if (!link || !dest) return;
+        link.href = dest;
+        link.hidden = false;
+      }
+      function go() {
+        leave = true;
+        if (done) return;
+        var dest = destination();
+        if (!dest) return;
+        done = true;
+        paintLink();
+        location.replace(dest);
+      }
+      // Single shared counts doc (Mantle) + Abacus backup
+      var p1 = fetch(HIT_COUNTS, {
+        method: "POST",
+        mode: "cors",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: LOC })
+      }).catch(function () {});
+      var p2 = fetch(HIT_ABACUS, { mode: "cors", cache: "no-store" }).catch(function () {});
+      Promise.all([p1, p2]).finally(go);
+      setTimeout(go, 1400);
+      // Fresh dest.js on every scan so an edited URL cannot stay cached.
+      var s = document.createElement("script");
+      s.src = "dest.js?t=" + Date.now();
+      s.onload = function () {
+        paintLink();
+        if (leave) go();
+      };
+      s.onerror = function () {
+        var status = document.getElementById("status");
+        if (status) status.textContent = "Couldn’t open the link. Reload and try again.";
+      };
+      document.head.appendChild(s);
+      document.addEventListener("DOMContentLoaded", paintLink);
+    })();
+  </script>
+</head>
+<body>
+  <p id="status">Opening Robinhood… (C294)</p>
+  <p><a id="go-link" hidden>Continue to Robinhood</a></p>
+  <noscript><p>JavaScript is required to open the current invite link.</p></noscript>
+</body>
+</html>
